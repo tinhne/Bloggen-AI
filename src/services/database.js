@@ -2,10 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 class DatabaseService {
-  /**
-   * Get all categories
-   * @returns {Promise<Array>} - List of all categories
-   */
+// get all categories
   async getAllCategories() {
     return await prisma.category.findMany({
       include: {
@@ -16,11 +13,7 @@ class DatabaseService {
     });
   }
   
-  /**
-   * Get a category by ID
-   * @param {number} id - The category ID
-   * @returns {Promise<object>} - The category
-   */
+  // laays theo ID
   async getCategoryById(id) {
     return await prisma.category.findUnique({
       where: { id: Number(id) },
@@ -30,23 +23,14 @@ class DatabaseService {
     });
   }
   
-  /**
-   * Create a new category
-   * @param {string} name - The category name
-   * @returns {Promise<object>} - The created category
-   */
+  // tao moi category
   async createCategory(name) {
     return await prisma.category.create({
       data: { name }
     });
   }
   
-  /**
-   * Get all articles with pagination
-   * @param {number} page - Page number
-   * @param {number} pageSize - Number of items per page
-   * @returns {Promise<object>} - Paginated articles
-   */
+  //  get all articles
   async getArticles(page = 1, pageSize = 10) {
     const skip = (page - 1) * pageSize;
     
@@ -75,11 +59,7 @@ class DatabaseService {
     };
   }
   
-  /**
-   * Get article by ID
-   * @param {number} id - The article ID
-   * @returns {Promise<object>} - The article
-   */
+  // get article by ID
   async getArticleById(id) {
     return await prisma.article.findUnique({
       where: { id: Number(id) },
@@ -89,14 +69,7 @@ class DatabaseService {
     });
   }
   
-  /**
-   * Search articles
-   * @param {string} query - Search query
-   * @param {number} categoryId - Category ID filter
-   * @param {number} page - Page number
-   * @param {number} pageSize - Number of items per page
-   * @returns {Promise<object>} - Search results
-   */
+  // search articles
   async searchArticles(query = '', categoryId = null, page = 1, pageSize = 10) {
     const skip = (page - 1) * pageSize;
     
