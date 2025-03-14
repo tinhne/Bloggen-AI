@@ -39,7 +39,12 @@ module.exports = function(program) {
           options.style, 
           options.category
         );
-        
+        console.log("DEBUG - Crawled Article:", article); // Check if article has an ID
+        // Nếu article không có ID, báo lỗi
+if (!article || !article.id) {
+  spinner.fail(chalk.red('Crawled article is invalid or missing ID'));
+  return;
+}
         // Process with AI
         spinner.text = 'Processing content with AI...';
         try {

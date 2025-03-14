@@ -1,113 +1,85 @@
-// src/services/cache.js
+const Redis = require('ioredis');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 
 class CacheService {
   constructor() {
-    // Đảm bảo thư mục cache tồn tại
-    this.cacheDir = path.resolve(process.cwd(), '.cache');
-    if (!fs.existsSync(this.cacheDir)) {
-      fs.mkdirSync(this.cacheDir, { recursive: true });
-    }
+    this.redis = new Redis({
+      host: '127.0.0.1', 
+      port: 6379
+    });
+
+    this.redis.on('error', (err) => {
+      console.error('Redis Error:', err);
+    });
   }
-  
-  // tạo key
+
+  // Tạo key bằng hash MD5 từ URL
   generateKey(url) {
     return crypto.createHash('md5').update(url).digest('hex');
   }
-  
-  //  Kiểm tra bài viết có trong cache không (cả DB và file)
 
+  // Kiểm tra bài viết có trong cache (Redis hoặc DB)
   async get(url) {
     try {
-      // 1Kiểm tra trong file cache trước
       const cacheKey = this.generateKey(url);
-      const cachePath = path.join(this.cacheDir, `${cacheKey}.json`);
-  
-      if (fs.existsSync(cachePath)) {
-        const cacheData = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-        const cacheAge = Date.now() - cacheData.timestamp;
-  
-        // Nếu cache còn hợp lệ (dưới 24h)
-        if (cacheAge < 24 * 60 * 60 * 1000) {
-          return { 
-            type: 'file', 
-            data: cacheData.data 
-          };
-        } else {
-          // Xóa cache file đã hết hạn
-          fs.unlinkSync(cachePath);
-        }
+
+      //  Kiểm tra trong Redis
+      const cacheData = await this.redis.get(cacheKey);
+      if (cacheData) {
+        console.log("Cache hit:", JSON.parse(cacheData));
+        return { type: 'redis', data: JSON.parse(cacheData) };
       }
-  
-      // Nếu không có trong file cache, kiểm tra database
+
+      // Nếu không có trong Redis, kiểm tra trong database
       const article = await prisma.article.findFirst({
         where: { sourceUrl: url },
         include: { category: true }
       });
-  
+
       if (article) {
-        return { 
-          type: 'db', 
-          data: article 
-        };
+        return { type: 'db', data: article };
       }
-  
-      // Không tìm thấy trong cache & DB
+
+      //  Không tìm thấy
       return null;
     } catch (error) {
       console.error('Cache error:', error);
       return null;
     }
   }
-  
-  
-  // Lưu dữ liệu vào cache
-  set(url, data) {
+
+  // Lưu dữ liệu vào Redis (với TTL = 24h)
+  async set(url, data) {
     try {
       const cacheKey = this.generateKey(url);
-      const cachePath = path.join(this.cacheDir, `${cacheKey}.json`);
-      
-      const cacheData = {
-        timestamp: Date.now(),
-        url,
-        data
-      };
-      
-      fs.writeFileSync(cachePath, JSON.stringify(cacheData, null, 2));
+      await this.redis.set(cacheKey, JSON.stringify(data), 'EX', 24 * 60 * 60);
     } catch (error) {
-      console.error('Cache write error:', error);
+      console.error('Redis SET error:', error);
     }
   }
-  
-  //xoa cache
-  invalidate(url) {
+
+  // Xóa cache theo URL
+  async invalidate(url) {
     try {
       const cacheKey = this.generateKey(url);
-      const cachePath = path.join(this.cacheDir, `${cacheKey}.json`);
-      
-      if (fs.existsSync(cachePath)) {
-        fs.unlinkSync(cachePath);
-      }
+      await this.redis.del(cacheKey);
     } catch (error) {
       console.error('Cache invalidation error:', error);
     }
   }
-  
-  // delete all
-  clear() {
+
+  // Xóa toàn bộ cache Redis
+  async clear() {
     try {
-      const files = fs.readdirSync(this.cacheDir);
-      for (const file of files) {
-        fs.unlinkSync(path.join(this.cacheDir, file));
-      }
+      await this.redis.flushall();
     } catch (error) {
       console.error('Cache clear error:', error);
     }
   }
+  
 }
+
 
 module.exports = new CacheService();
